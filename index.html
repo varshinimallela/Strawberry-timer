@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strawberry Pomodoro Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background: linear-gradient(135deg, #ffe6ea 0%, #ffccd5 100%);
+            min-height: 100vh;
+        }
+        
+        .timer-container {
+            background-color: rgba(255, 255, 255, 0.85);
+            box-shadow: 0 10px 25px rgba(255, 182, 193, 0.3);
+            backdrop-filter: blur(5px);
+        }
+        
+        .progress-ring {
+            transform: rotate(-90deg);
+        }
+        
+        .button {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(255, 105, 180, 0.15);
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(255, 105, 180, 0.25);
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+        
+        .completed-session {
+            animation: pop 0.5s ease;
+        }
+        
+        @keyframes pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            70% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .goal-progress {
+            height: 10px;
+            background-color: #ffccd5;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .goal-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #ff8fab, #ff5c8a);
+            border-radius: 5px;
+            transition: width 0.5s ease;
+        }
+        
+        .timer-display {
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .floating {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+    <div class="timer-container rounded-3xl p-8 w-full max-w-md mx-auto">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-pink-500 flex justify-center items-center">
+                <span class="floating mr-2">🍓</span> 
+                Strawberry Timer 
+                <span class="floating ml-2">🍓</span>
+            </h1>
+            <p class="text-pink-400 mt-1">Stay focused with sweetness</p>
+        </div>
+        
+        <div class="flex justify-center mb-8">
+            <div class="relative w-64 h-64 flex items-center justify-center">
+                <svg class="progress-ring absolute" width="240" height="240">
+                    <circle class="progress-ring-background" stroke="#ffccd5" stroke-width="12" fill="transparent" r="110" cx="120" cy="120"></circle>
+                    <circle id="progress-ring-circle" stroke="#ff5c8a" stroke-width="12" fill="transparent" r="110" cx="120" cy="120" stroke-dasharray="691" stroke-dashoffset="0"></circle>
+                </svg>
+                <div class="text-center z-10">
+                    <div id="timer-display" class="timer-display text-5xl font-bold text-pink-600">25:00</div>
+                    <div id="session-type" class="mt-2 text-pink-500 font-medium">Focus Time</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flex justify-center space-x-4 mb-8">
+            <button id="start-btn" class="button bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-6 rounded-full">
+                Start
+            </button>
+            <button id="reset-btn" class="button bg-pink-200 hover:bg-pink-300 text-pink-700 font-bold py-3 px-6 rounded-full">
+                Reset
+            </button>
+        </div>
+        
+        <div class="mb-6">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-pink-600 font-medium">Daily Goal</h3>
+                <span id="goal-counter" class="text-pink-500 font-medium">0/4 Pomodoros</span>
+            </div>
+            <div class="goal-progress">
+                <div id="goal-bar" class="goal-bar" style="width: 0%"></div>
+            </div>
+        </div>
+        
+        <div class="mb-4">
+            <h3 class="text-pink-600 font-medium mb-2">Today's Sessions</h3>
+            <div id="sessions-container" class="flex flex-wrap gap-2">
+                <!-- Sessions will be added here -->
+            </div>
+        </div>
+        
+        <div class="mt-6 text-center">
+            <label class="inline-flex items-center text-pink-600">
+                <input type="checkbox" id="sound-toggle" class="form-checkbox h-5 w-5 text-pink-500 rounded" checked>
+                <span class="ml-2">Enable sounds</span>
+            </label>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM elements
+            const timerDisplay = document.getElementById('timer-display');
+            const sessionType = document.getElementById('session-type');
+            const startBtn = document.getElementById('start-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const progressRing = document.getElementById('progress-ring-circle');
+            const sessionsContainer = document.getElementById('sessions-container');
+            const goalCounter = document.getElementById('goal-counter');
+            const goalBar = document.getElementById('goal-bar');
+            const soundToggle = document.getElementById('sound-toggle');
+            
+            // Timer variables
+            const focusTime = 25 * 60; // 25 minutes in seconds
+            const breakTime = 5 * 60;  // 5 minutes in seconds
+            let timeLeft = focusTime;
+            let isRunning = false;
+            let isFocusSession = true;
+            let timer;
+            let completedSessions = 0;
+            const dailyGoal = 4;
+            
+            // Sound effects
+            const tickSound = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+            const chimeSound = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+            
+            // Calculate circumference of progress ring
+            const circumference = 2 * Math.PI * 110;
+            progressRing.style.strokeDasharray = `${circumference}`;
+            
+            // Load saved sessions from localStorage
+            function loadSavedSessions() {
+                const savedSessions = JSON.parse(localStorage.getItem('pomodoroSessions')) || [];
+                const today = new Date().toDateString();
+                
+                // Filter sessions from today
+                const todaySessions = savedSessions.filter(session => 
+                    new Date(session.timestamp).toDateString() === today
+                );
+                
+                // Update completed sessions count
+                completedSessions = todaySessions.length;
+                updateGoalDisplay();
+                
+                // Display sessions
+                todaySessions.forEach(session => {
+                    addSessionIcon(session.type);
+                });
+            }
+            
+            // Format time as MM:SS
+            function formatTime(seconds) {
+                const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+                const secs = (seconds % 60).toString().padStart(2, '0');
+                return `${mins}:${secs}`;
+            }
+            
+            // Update timer display
+            function updateDisplay() {
+                timerDisplay.textContent = formatTime(timeLeft);
+                
+                // Update progress ring
+                const maxTime = isFocusSession ? focusTime : breakTime;
+                const offset = circumference - (timeLeft / maxTime) * circumference;
+                progressRing.style.strokeDashoffset = offset;
+            }
+            
+            // Update goal display
+            function updateGoalDisplay() {
+                goalCounter.textContent = `${completedSessions}/${dailyGoal} Pomodoros`;
+                const percentage = Math.min((completedSessions / dailyGoal) * 100, 100);
+                goalBar.style.width = `${percentage}%`;
+            }
+            
+            // Add session icon to the container
+            function addSessionIcon(type) {
+                const icon = document.createElement('div');
+                icon.className = 'completed-session w-8 h-8 flex items-center justify-center bg-pink-100 rounded-full text-lg';
+                icon.textContent = type === 'focus' ? '🍓' : '🍒';
+                icon.title = type === 'focus' ? 'Focus Session' : 'Break Session';
+                sessionsContainer.appendChild(icon);
+            }
+            
+            // Save session to localStorage
+            function saveSession(type) {
+                const session = {
+                    type,
+                    timestamp: new Date().toISOString()
+                };
+                
+                const savedSessions = JSON.parse(localStorage.getItem('pomodoroSessions')) || [];
+                savedSessions.push(session);
+                localStorage.setItem('pomodoroSessions', JSON.stringify(savedSessions));
+                
+                if (type === 'focus') {
+                    completedSessions++;
+                    updateGoalDisplay();
+                }
+                
+                addSessionIcon(type);
+            }
+            
+            // Start/pause timer
+            function toggleTimer() {
+                if (isRunning) {
+                    clearInterval(timer);
+                    startBtn.textContent = 'Resume';
+                } else {
+                    timer = setInterval(updateTimer, 1000);
+                    startBtn.textContent = 'Pause';
+                }
+                isRunning = !isRunning;
+            }
+            
+            // Reset timer
+            function resetTimer() {
+                clearInterval(timer);
+                isFocusSession = true;
+                timeLeft = focusTime;
+                isRunning = false;
+                startBtn.textContent = 'Start';
+                sessionType.textContent = 'Focus Time';
+                updateDisplay();
+            }
+            
+            // Update timer every second
+            function updateTimer() {
+                if (timeLeft > 0) {
+                    timeLeft--;
+                    updateDisplay();
+                    
+                    // Play tick sound at certain intervals
+                    if (soundToggle.checked && timeLeft % 60 === 0 && timeLeft > 0) {
+                        tickSound.play().catch(e => console.log("Audio play failed:", e));
+                    }
+                } else {
+                    clearInterval(timer);
+                    
+                    // Play chime sound
+                    if (soundToggle.checked) {
+                        chimeSound.play().catch(e => console.log("Audio play failed:", e));
+                    }
+                    
+                    // Save completed session
+                    saveSession(isFocusSession ? 'focus' : 'break');
+                    
+                    // Switch between focus and break
+                    isFocusSession = !isFocusSession;
+                    timeLeft = isFocusSession ? focusTime : breakTime;
+                    sessionType.textContent = isFocusSession ? 'Focus Time' : 'Break Time';
+                    
+                    // Auto-start next session
+                    timer = setInterval(updateTimer, 1000);
+                }
+            }
+            
+            // Event listeners
+            startBtn.addEventListener('click', toggleTimer);
+            resetBtn.addEventListener('click', resetTimer);
+            
+            // Initialize
+            updateDisplay();
+            loadSavedSessions();
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9644e18731cb2e97',t:'MTc1MzM3NTQ1My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
